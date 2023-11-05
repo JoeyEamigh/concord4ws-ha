@@ -1,0 +1,21 @@
+{
+    "config": {
+        "abort": {
+            "already_configured": "Device is already configured"
+        },
+        "error": {
+            "cannot_connect": "Failed to connect",
+            "unknown": "Unexpected error"
+        },
+        "step": {
+            "user": {
+                "data": {
+                    "host": "Concord4WS IP Address",
+                    "name": "Panel Name",
+                    "port": "Concord4WS Port Number"
+                },
+                "title": "Concord4WS Connection Details"
+            }
+        }
+    }
+}

@@ -1,0 +1,18 @@
+{
+  "domain": "concord_ws",
+  "name": "Concord WebSocket",
+  "codeowners": [
+    "@JoeyEamigh"
+  ],
+  "version": "0.1.0",
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/JoeyEamigh/concord_ws-ha",
+  "homekit": {},
+  "iot_class": "local_push",
+  "requirements": [
+    "concord4ws==0.0.1"
+  ],
+  "ssdp": [],
+  "zeroconf": []
+}
