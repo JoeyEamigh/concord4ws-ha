@@ -8,7 +8,7 @@
   "documentation": "https://github.com/JoeyEamigh/concord4ws",
   "homekit": {},
   "iot_class": "local_push",
-  "requirements": ["git+https://github.com/JoeyEamigh/concord4ws-py.git@main#concord4ws==0.2.0"],
+  "requirements": ["git+https://github.com/JoeyEamigh/concord4ws-py.git@main#concord4ws"],
   "ssdp": [],
   "zeroconf": [],
   "loggers": ["concord4ws-ha", "concord4ws"]
