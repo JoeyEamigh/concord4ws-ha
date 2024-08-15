@@ -1,10 +1,13 @@
 """The Concord WebSocket integration."""
+
 from __future__ import annotations
+
+from concord4ws import Concord4WSClient
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
-from concord4ws import Concord4WSClient
+from homeassistant.exceptions import ConfigEntryNotReady
 
 from .const import DOMAIN
 
@@ -12,14 +15,19 @@ PLATFORMS: list[Platform] = [Platform.ALARM_CONTROL_PANEL, Platform.SENSOR]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up Concord WebSocket from a config entry."""
+    """Set up Concord4 WebSocket from a config entry."""
 
     hass.data.setdefault(DOMAIN, {})
 
-    hub = Concord4WSClient(entry.data["host"], entry.data["port"])
-    await hub.connect()
+    server = Concord4WSClient(entry.data["host"], entry.data["port"])
+    avialable = await server.test_connect()
 
-    hass.data[DOMAIN][entry.entry_id] = {"hub": hub, "name": entry.data["name"]}
+    if not avialable:
+        raise ConfigEntryNotReady
+
+    await server.connect()
+
+    hass.data[DOMAIN][entry.entry_id] = {"server": server, "name": entry.data["name"]}
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 

@@ -1,13 +1,16 @@
-from typing import Final
+"""Alarm Control Panel for the Concord4 WebSocket integration."""
+
+from concord4ws import Concord4WSClient
+from concord4ws.types import code_to_keypresses
+
 from homeassistant.components.alarm_control_panel import (
     AlarmControlPanelEntity,
     AlarmControlPanelEntityDescription,
 )
 from homeassistant.components.alarm_control_panel.const import (
     AlarmControlPanelEntityFeature,
+    CodeFormat,
 )
-from homeassistant.components.sensor import SensorEntityDescription
-from homeassistant.components.sensor.const import SensorDeviceClass
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     STATE_ALARM_ARMED_AWAY,
@@ -15,12 +18,17 @@ from homeassistant.const import (
     STATE_ALARM_DISARMED,
 )
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import entity_platform
 from homeassistant.helpers.device_registry import DeviceInfo
-from homeassistant.helpers.entity import Entity
 
-from concord4ws import Concord4WSClient, Concord4Zone, Concord4PartitionArmingLevel
-
-from .const import DOMAIN, ZONE_STATE
+from .const import (
+    DOMAIN,
+    LOGGER,
+    USER_CODE_SERVICE_SCHEMA,
+    alarm_panel_identifier,
+    alarm_panel_uid,
+)
 
 
 async def async_setup_entry(
@@ -28,83 +36,224 @@ async def async_setup_entry(
 ):
     """Add sensors for passed config_entry in HA."""
     name: str = hass.data[DOMAIN][config.entry_id]["name"]
-    hub: Concord4WSClient = hass.data[DOMAIN][config.entry_id]["hub"]
+    server: Concord4WSClient = hass.data[DOMAIN][config.entry_id]["server"]
 
-    async_add_entities([Concord4AlarmPanel(name, hub)])
+    async_add_entities(
+        [
+            Concord4AlarmPanel(
+                server, name, server.state.partitions[partition].partition_number
+            )
+            for partition in server.state.partitions
+            if len(server.state.partitions[partition].zones) > 0
+        ]
+    )
+
+    platform = entity_platform.async_get_current_platform()
+
+    platform.async_register_entity_service(
+        "alarm_arm_home_instant",
+        USER_CODE_SERVICE_SCHEMA,
+        "async_alarm_arm_home_instant",
+    )
+    platform.async_register_entity_service(
+        "alarm_arm_home_silent",
+        USER_CODE_SERVICE_SCHEMA,
+        "async_alarm_arm_home_silent",
+    )
+    platform.async_register_entity_service(
+        "alarm_arm_away_instant",
+        USER_CODE_SERVICE_SCHEMA,
+        "async_alarm_arm_away_instant",
+    )
+    platform.async_register_entity_service(
+        "alarm_arm_away_silent",
+        USER_CODE_SERVICE_SCHEMA,
+        "async_alarm_arm_away_silent",
+    )
+
+
+class _Concord4PanelConfig:
+    def __init__(self, panel_name: str, partition_number: int):
+        self.panel_name = panel_name
+        self.partition_number = partition_number
 
 
 class Concord4AlarmPanel(AlarmControlPanelEntity):
-    """Base representation of a Hello World Sensor."""
+    """Representation of a Concord4 Alarm Panel."""
 
     should_poll: bool = False
+    _attr_has_entity_name = True
+    _attr_code_arm_required = True
+    _attr_supported_features = (
+        AlarmControlPanelEntityFeature.ARM_HOME
+        | AlarmControlPanelEntityFeature.ARM_AWAY
+    )
+    _attr_code_format = CodeFormat.NUMBER
 
-    def __init__(self, name: str, hub: Concord4WSClient):
-        """Initialize the sensor."""
+    def __init__(self, server: Concord4WSClient, name: str, partition_number: int):
+        """Initialize the alarm panel."""
 
-        self._internal_config_name: str = name
-        self._attr_unique_id = f"{name}_concord_alarm_panel"
+        LOGGER.debug(f"Creating alarm panel for {name} partition {partition_number}")
+
+        self._server: Concord4WSClient = server
+        self._config = _Concord4PanelConfig(
+            panel_name=name, partition_number=partition_number
+        )
+
+        self._attr_unique_id = alarm_panel_uid(
+            self._server.state.panel.serial_number, partition_number
+        )
         self.entity_description = AlarmControlPanelEntityDescription(
-            key="{name}_concord_alarm_panel",
-            name=f"{name}",
-            has_entity_name=True,
+            key=alarm_panel_identifier(
+                self._server.state.panel.serial_number, partition_number
+            ),
+            name="Alarm Panel"
+            if partition_number == 1
+            else f"Partition {partition_number} Alarm Panel",
         )
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, f"{name}")},
-            manufacturer="GE",
-            model="Concord4",
-            name=f"{name}",
-            via_device=(DOMAIN, f"Concord4WS"),
-        )
-
-        self._hub: Concord4WSClient = hub
-        self._attr_code_arm_required = False
-        # self._attr_supported_features = (
-        #     AlarmControlPanelEntityFeature.ARM_HOME
-        #     | AlarmControlPanelEntityFeature.ARM_AWAY
-        # )
-
-    @property
-    def name(self):
-        """Name of the entity."""
-        return f"{self._internal_config_name}"
 
     @property
     def device_info(self):
         """Return information to link this entity with the correct device."""
-        return {"identifiers": {(DOMAIN, "concord_alarm_panel")}}
+        return DeviceInfo(
+            identifiers={
+                (
+                    DOMAIN,
+                    alarm_panel_identifier(
+                        self._server.state.panel.serial_number,
+                        self._config.partition_number,
+                    ),
+                )
+            },
+            manufacturer="GE",
+            model=self._server.state.panel.panel_type.capitalize()
+            if self._server.state.panel.panel_type is not None
+            else "Concord",
+            name=self._config.panel_name,
+            serial_number=self._server.state.panel.serial_number,
+            hw_version=self._server.state.panel.hardware_revision,
+            sw_version=self._server.state.panel.software_revision,
+        )
 
     @property
     def available(self) -> bool:
-        """Return True if roller and hub is available."""
-        return self._hub.connected
+        """Return True if websocket server (and by extension the alarm panel) is available."""
+        return self._server.connected
 
     async def async_added_to_hass(self):
         """Run when this Entity has been added to HA."""
-        self._hub.register_callback(
-            next(iter(self._hub.state.partitions)), self.async_write_ha_state
+        self._server.register_callback(
+            self._get_partition().callback_id(), self.async_write_ha_state
         )
 
     async def async_will_remove_from_hass(self):
         """Entity being removed from hass."""
-        self._hub.remove_callback(
-            next(iter(self._hub.state.partitions)), self.async_write_ha_state
+        self._server.remove_callback(
+            self._get_partition().callback_id(), self.async_write_ha_state
         )
 
     @property
     def state(self) -> str | None:
         """Return the state of the device."""
-        states = set()
 
-        for partition in self._hub.state.partitions.values():
-            match partition.arming_level:
-                case Concord4PartitionArmingLevel.OFF:
-                    states.add(STATE_ALARM_DISARMED)
-                case Concord4PartitionArmingLevel.STAY:
-                    states.add(STATE_ALARM_ARMED_HOME)
-                case Concord4PartitionArmingLevel.AWAY:
-                    states.add(STATE_ALARM_ARMED_AWAY)
+        match self._get_partition().arming_level:
+            case "off":
+                return STATE_ALARM_DISARMED
+            case "away":
+                return STATE_ALARM_ARMED_AWAY
+            case "stay":
+                return STATE_ALARM_ARMED_HOME
+            case _:
+                return None
 
-        if len(states) == 1:
-            return states.pop()
-        else:
-            return None
+    async def async_alarm_disarm(self, code=None) -> None:
+        """Send disarm command."""
+        if code is None:
+            raise Concord4PanelError("Code required to disarm")
+
+        await self._server.disarm(
+            code=code_to_keypresses(code), partition=self._config.partition_number
+        )
+
+    async def async_handle_alarm_arm_home(self, code=None) -> None:
+        """Send arm home command."""
+        if code is None:
+            raise Concord4PanelError("Code required to arm home")
+
+        await self._server.arm(
+            "stay",
+            code=code_to_keypresses(code),
+            partition=self._config.partition_number,
+        )
+
+    async def async_alarm_arm_home_instant(self, code: str | None = None) -> None:
+        """Send arm stay instant command."""
+        if code is None:
+            raise Concord4PanelError("Code required to arm home")
+
+        await self._server.arm(
+            "stay",
+            code=code_to_keypresses(code),
+            level="instant",
+            partition=self._config.partition_number,
+        )
+
+    async def async_alarm_arm_home_silent(self, code: str | None = None) -> None:
+        """Send arm stay silent command."""
+        if code is None:
+            raise Concord4PanelError("Code required to arm home")
+
+        await self._server.arm(
+            "stay",
+            code=code_to_keypresses(code),
+            level="silent",
+            partition=self._config.partition_number,
+        )
+
+    async def async_handle_alarm_arm_away(self, code=None) -> None:
+        """Send arm away command."""
+        if code is None:
+            raise Concord4PanelError("Code required to arm away")
+
+        await self._server.arm(
+            "away",
+            code=code_to_keypresses(code),
+            partition=self._config.partition_number,
+        )
+
+    async def async_alarm_arm_away_instant(self, code: str | None = None) -> None:
+        """Send arm away instant command."""
+        if code is None:
+            raise Concord4PanelError("Code required to arm away")
+
+        await self._server.arm(
+            "away",
+            code=code_to_keypresses(code),
+            level="instant",
+            partition=self._config.partition_number,
+        )
+
+    async def async_alarm_arm_away_silent(self, code: str | None = None) -> None:
+        """Send arm away silent command."""
+        if code is None:
+            raise Concord4PanelError("Code required to arm away")
+
+        await self._server.arm(
+            "away",
+            code=code_to_keypresses(code),
+            level="silent",
+            partition=self._config.partition_number,
+        )
+
+    def _get_partition(self):
+        return self._server.state.partitions[self._config.partition_number]
+
+
+class Concord4PanelError(HomeAssistantError):
+    """Base error class for Concord4 Panel."""
+
+    def __init__(self, message: str):
+        """Initialize the error."""
+        super().__init__(message)
+        self.message = message
+        self.name = "Concord4PanelError"

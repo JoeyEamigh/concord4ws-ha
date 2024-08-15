@@ -17,5 +17,32 @@
     "abort": {
       "already_configured": "[%key:common::config_flow::abort::already_configured_device%]"
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "description": "Alarm Panel Options",
+        "data": {
+          "default_arm_stay_mode": "Default Arm Stay Mode",
+          "default_arm_away_mode": "Default Arm Away Mode"
+        }
+      }
+    }
+  },
+  "selector": {
+    "default_arm_away_mode": {
+      "options": {
+        "normal": "Normal",
+        "instant": "Instant",
+        "silent": "Silent"
+      }
+    },
+    "default_arm_stay_mode": {
+      "options": {
+        "normal": "Normal",
+        "instant": "Instant",
+        "silent": "Silent"
+      }
+    }
   }
 }
