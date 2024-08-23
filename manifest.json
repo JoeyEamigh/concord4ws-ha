@@ -2,7 +2,7 @@
   "domain": "concord4ws",
   "name": "Concord4WS",
   "codeowners": ["@JoeyEamigh"],
-  "version": "0.2.0",
+  "version": "0.2.1",
   "config_flow": true,
   "dependencies": [],
   "documentation": "https://github.com/JoeyEamigh/concord4ws",
