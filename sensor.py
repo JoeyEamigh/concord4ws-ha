@@ -187,13 +187,13 @@ class ZoneSensor(SensorEntity):
     async def async_added_to_hass(self):
         """Run when this Entity has been added to HA."""
         self._server.register_callback(
-            self._get_partition().callback_id(), self.async_write_ha_state
+            self._get_zone().callback_id(), self.async_write_ha_state
         )
 
     async def async_will_remove_from_hass(self):
         """Entity being removed from hass."""
         self._server.remove_callback(
-            self._get_partition().callback_id(), self.async_write_ha_state
+            self._get_zone().callback_id(), self.async_write_ha_state
         )
 
     @property
@@ -211,6 +211,3 @@ class ZoneSensor(SensorEntity):
     def _get_zone(self) -> ZoneData:
         """Get the zone data."""
         return self._server.state.zones[self._config.zone_id]
-
-    def _get_partition(self):
-        return self._server.state.partitions[self._config.partition_number]
