@@ -163,6 +163,8 @@ class Concord4AlarmPanel(AlarmControlPanelEntity):
                 return STATE_ALARM_ARMED_AWAY
             case "stay":
                 return STATE_ALARM_ARMED_HOME
+            case "home":     ###adde case to match return from panel
+                return STATE_ALARM_ARMED_HOME
             case _:
                 return None
 
