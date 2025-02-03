@@ -6,17 +6,13 @@ from concord4ws.types import code_to_keypresses
 from homeassistant.components.alarm_control_panel import (
     AlarmControlPanelEntity,
     AlarmControlPanelEntityDescription,
+    AlarmControlPanelState,
 )
 from homeassistant.components.alarm_control_panel.const import (
     AlarmControlPanelEntityFeature,
     CodeFormat,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import (
-    STATE_ALARM_ARMED_AWAY,
-    STATE_ALARM_ARMED_HOME,
-    STATE_ALARM_DISARMED,
-)
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_platform
@@ -158,11 +154,11 @@ class Concord4AlarmPanel(AlarmControlPanelEntity):
 
         match self._get_partition().arming_level:
             case "off":
-                return STATE_ALARM_DISARMED
+                return AlarmControlPanelState.DISARMED
             case "away":
-                return STATE_ALARM_ARMED_AWAY
+                return AlarmControlPanelState.ARMED_AWAY
             case "stay":
-                return STATE_ALARM_ARMED_HOME
+                return AlarmControlPanelState.ARMED_HOME
             case _:
                 return None
 
